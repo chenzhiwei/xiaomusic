@@ -25,7 +25,6 @@ from watchdog.events import (
 from watchdog.observers import Observer
 
 from xiaomusic import __version__
-from xiaomusic.analytics import Analytics
 from xiaomusic.config import (
     KEY_WORD_ARG_BEFORE_DICT,
     Config,
@@ -119,9 +118,6 @@ class XiaoMusic:
 
         # 更新设备列表
         self.update_devices()
-
-        # 启动统计
-        self.analytics = Analytics(self.log, self.config)
 
         debug_config = deepcopy_data_no_sensitive_info(self.config)
         self.log.info(f"Startup OK. {debug_config}")
@@ -887,11 +883,6 @@ class XiaoMusic:
         except Exception as e:
             self.log.exception(f"Execption {e}")
 
-    async def analytics_task_daily(self):
-        while True:
-            await self.analytics.send_daily_event()
-            await asyncio.sleep(3600)
-
     def start_file_watch(self):
         if not self.config.enable_file_watch:
             self.log.info("目录监控功能已关闭")
@@ -928,14 +919,6 @@ class XiaoMusic:
         self.log.info("run_forever start")
         self.try_gen_all_music_tag()  # 事件循环开始后调用一次
         self.crontab.start()
-        asyncio.create_task(self.analytics.send_startup_event())
-        # 取配置 enable_file_watch 循环开始时调用一次，控制目录监控开关
-        if self.config.enable_file_watch:
-            self.start_file_watch()
-        analytics_task = asyncio.create_task(self.analytics_task_daily())
-        assert (
-            analytics_task is not None
-        )  # to keep the reference to task, do not remove this
         async with ClientSession() as session:
             self.session = session
             self.log.info(f"run_forever session:{self.session}")
@@ -1833,7 +1816,6 @@ class XiaoMusicDevice:
         self._play_failed_cnt = 0
 
         self.log.info(f"【{name}】已经开始播放了")
-        await self.xiaomusic.analytics.send_play_event(name, sec, self.hardware)
 
         # 设置下一首歌曲的播放定时器
         if sec <= 1:
